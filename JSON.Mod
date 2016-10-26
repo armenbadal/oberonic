@@ -34,11 +34,13 @@ TYPE
   Value* = POINTER TO ValueDesc;
   
   ObjectDesc = RECORD
+    elems : Pair
   END;
 
   PairDesc = RECORD
     key : String;
     val : Value;
+    next : Pair
   END;
 
   ValueDesc = RECORD
@@ -59,6 +61,11 @@ VAR
   lexeme : ARRAY 256 OF CHAR;
   length : INTEGER;
   lookahead : SHORTINT;
+
+  jsontree : Object;
+
+
+(* AST *)
 
 (* Scanner *)
 PROCEDURE scan;
@@ -139,7 +146,7 @@ BEGIN
 END scan;
 
 (* Parser *)
-PROCEDURE Parse*(name : ARRAY OF CHAR) : BOOLEAN;
+PROCEDURE Parse*(name : ARRAY OF CHAR);
   PROCEDURE match(exp : SHORTINT);
   BEGIN
     IF lookahead = exp THEN scan
@@ -147,65 +154,118 @@ PROCEDURE Parse*(name : ARRAY OF CHAR) : BOOLEAN;
     END
   END match;
 
-  PROCEDURE^ parseObject;
-  PROCEDURE^ parseArray;
+  PROCEDURE^ parseObject() : Object;
+  PROCEDURE^ parseArray() : Value;
 
-  PROCEDURE parseValue;
+  PROCEDURE parseValue() : Value;
+  VAR val : Value;
   BEGIN
+    NEW(val);
     CASE lookahead OF
-      xString : scan
-    | xNumber : scan
-    | xLeftBrace : parseObject
-    | xLeftBrack : parseArray
+      xString : val^.kind := vString;
+                COPY(lexeme, val^.str);
+                scan
+    | xNumber : val^.kind := vNumber;
+                val^.num := 0.0;
+                scan
+    | xLeftBrace : val^.kind := vObject;
+                   val^.obj := parseObject()
+    | xLeftBrack : val^.kind := vArray;
+                   val^.arr := parseArray()
     | xTrue, xFalse, xNull : scan
     ELSE (* syntax error *)
-    END
+    END;
+    RETURN val
   END parseValue;
 
-  PROCEDURE parseArray;
+  PROCEDURE parseArray() : Value;
+  VAR arr, vi : Value;
   BEGIN
     match(xLeftBrack);
-    parseValue;
+    arr := parseValue();
+    vi := arr;
     WHILE lookahead = xComma DO
       match(xComma);
-      parseValue;
+      vi^.next := parseValue();
+      vi := vi^.next
     END;
-    match(xRightBrack)
+    match(xRightBrack);
+    RETURN arr
   END parseArray;
 
-  PROCEDURE parseObject;
+  PROCEDURE parseObject() : Object;
+  VAR obj : Object; e, p : Pair; 
   BEGIN
     match(xLeftBrace);
     IF lookahead # xRightBrace THEN
+      NEW(e);
+      COPY(lexeme, e^.key);
       match(xString);
       match(xColon);
-      parseValue;
+      e^.val := parseValue();
+      NEW(obj);
+	  obj^.elems := e;
+      p := obj^.elems;
       WHILE lookahead = xComma DO
         match(xComma);
+        NEW(e);
+		COPY(lexeme, e^.key);
         match(xString);
         match(xColon);
-        parseValue;
+        e^.val := parseValue();
+        p^.next := e;
+		p := p^.next
       END
     END;
-    match(xRightBrace)
+    match(xRightBrace);
+    RETURN obj
   END parseObject;
 
+
 BEGIN
-  parseObject;
-  RETURN TRUE
+  NEW(text); Texts.Open(text, name);
+  Texts.OpenReader(reader, text, 0);
+  Texts.Read(reader, ch); scan;
+  jsontree := parseObject();
 END Parse;
 
-BEGIN (* Test *)
-  NEW(text); Texts.Open(text, "test0.txt");
-  Texts.OpenReader(reader, text, 0);
+(* ~ ~ TEST ~ ~ *)
+PROCEDURE^ (val : Value) print;
 
-  Texts.Read(reader, ch);
-  REPEAT
-    scan;
-    Console.String(lexeme); Console.Ln;
-  UNTIL lookahead = xEof
+PROCEDURE (obj : Object) print;
+VAR pi : Pair;
+BEGIN
+  Console.String("{");
+  pi := obj^.elems;
+  WHILE pi # NIL DO
+    Console.String(pi^.key);
+    Console.String(" : ");
+    pi^.val.print;
+    Console.String(",");
+    Console.Ln;
+    pi := pi^.next
+  END;
+  Console.String("}");
+  Console.Ln
+END print;
 
+PROCEDURE (val : Value) print;
+VAR v : Value;
+BEGIN
+  CASE val^.kind OF
+    vString : Console.String(val^.str)
+  | vNumber : Console.String("REAL")
+  | vObject : val^.obj.print
+  | vArray : Console.String("["); v := val^.arr;
+             WHILE v # NIL DO v.print; v := v^.next END;
+			 Console.String("]")
+  ELSE
+  END
+END print;
+(* ~ ~ TEST ~ ~ *)
 
+BEGIN Parse("test01.json");
+  jsontree.print
 END JSON.
 
 (*
