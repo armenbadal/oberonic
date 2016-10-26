@@ -17,6 +17,7 @@ CONST
   xTrue = 9;
   xFalse = 10;
   xNull = 11;
+  xEof = 12;
 
   (* Object types *)
   vString = 'S';
@@ -32,14 +33,6 @@ TYPE
   Pair* = POINTER TO PairDesc;
   Value* = POINTER TO ValueDesc;
   
-(*
-  Node = POINTER TO NodeDesc;
-  NodeDesc = RECORD
-    data : Value;
-    next : Node
-  END;
-*)
-
   ObjectDesc = RECORD
   END;
 
@@ -63,104 +56,154 @@ VAR
   text : Texts.Text;
   reader : Texts.Reader;
   ch : CHAR;
-  lex : ARRAY 256 OF CHAR;
-  len : INTEGER;
-  kind : SHORTINT;
-
-PROCEDURE parseObject;
-END parseObject;
-
-PROCEDURE parseArray;
-END parseArray;
-
-PROCEDURE parseValue;
-END parseValue;
+  lexeme : ARRAY 256 OF CHAR;
+  length : INTEGER;
+  lookahead : SHORTINT;
 
 (* Scanner *)
-
-PROCEDURE read;
-BEGIN Texts.Read(reader, ch);
-  lex[len] := ch; INC(len)
-END read;
-
-PROCEDURE isDigit(c : CHAR) : BOOLEAN;
-BEGIN RETURN (ORD(c) >= ORD('0')) & (ORD(c) <= ORD('9'))
-END isDigit;
-
-PROCEDURE scanNumber;
-  PROCEDURE scanDigits;
-  BEGIN WHILE isDigit(ch) DO read END
-  END scanDigits;
-BEGIN
-  IF ch = '-' THEN read END;
-  IF isDigit(ch) THEN
-    scanDigits;
-    IF ch = '.' THEN read; scanDigits END;
-	IF (ch = 'e') OR (ch = 'E') THEN read;
-      IF (ch = '-') OR (ch = '+') THEN read END;
-      scanDigits
-    END;
-    DEC(len); lex[len] := 0X;
-    kind := xNumber
-  END
-END scanNumber;
-
-PROCEDURE scanString;
-BEGIN
-  len := 0; read;
-  WHILE ch # '"' DO read END;
-  DEC(len); lex[len] := 0X;
-  kind := xString
-END scanString;
-
-(* scan 'true', 'false' and 'null' *)
-PROCEDURE scanConstant;
-BEGIN
-  IF ch = 't' THEN
-  ELSIF ch = 'f' THEN
-  ELSIF ch = 'n' THEN
-  END
-END scanConstant;
-
-PROCEDURE scanMetaChar;
-BEGIN
-  CASE ch OF
-    '{' : kind := xLeftBrace
-  | '}' : kind := xRightBrace
-  | '[' : kind := xLeftBrack
-  | ']' : kind := xRightBrack
-  | ':' : kind := xColon
-  | ',' : kind := xComma
-  ELSE kind := xUnknown
-  END;
-  IF kind # xUnknown THEN read END
-END scanMetaChar;
-
 PROCEDURE scan;
+  (* real numbers *)
+  PROCEDURE scanNumber;
+    PROCEDURE scanDigits;
+    BEGIN
+      WHILE (ch >= "0") & (ch <= "9") DO
+        lexeme[length] := ch;
+        INC(length);
+        Texts.Read(reader, ch)
+      END
+    END scanDigits;
+  BEGIN
+    length := 0;
+    IF ch = '-' THEN
+        lexeme[length] := ch;
+        INC(length);
+        Texts.Read(reader, ch)
+    END;
+    IF (ch >= "0") & (ch <= "9") THEN
+      scanDigits;
+      IF ch = '.' THEN
+        Texts.Read(reader, ch);
+        scanDigits
+      END;
+	  IF (ch = 'e') OR (ch = 'E') THEN
+        lexeme[length] := ch;
+        INC(length);
+        Texts.Read(reader, ch);
+        IF (ch = '-') OR (ch = '+') THEN
+          lexeme[length] := ch;
+          INC(length);
+          Texts.Read(reader, ch)
+        END;
+        scanDigits
+      END;
+      lexeme[length] := 0X;
+    END
+  END scanNumber;
+
+  (* string - \"[^\"]*\" *)
+  PROCEDURE scanString;
+  BEGIN
+    length := 0;
+    Texts.Read(reader, ch);
+    WHILE ch # 22X DO 
+      lexeme[length] := ch;
+      INC(length);
+      Texts.Read(reader, ch)
+    END;
+    lexeme[length] := 0X;
+    Texts.Read(reader, ch)
+  END scanString;
 BEGIN
-  REPEAT read UNTIL ORD(ch) > 32;
-  kind := xUnknown;
-  IF ch = '"' THEN scanString
-  ELSIF (ch = '-') OR isDigit(ch) THEN scanNumber
-  ELSIF (ch = 't') OR (ch = 'f') OR (ch = 'n') THEN scanConstant
-  ELSE scanMetaChar
+  (* skip spaces *)
+  WHILE ~reader.eot & (ch <= " ") DO
+    Texts.Read(reader, ch)
+  END;
+  IF ch = 22X THEN
+    scanString; lookahead := xString
+  ELSIF (ch = "-") OR ((ch >= "0") & (ch <= "9")) THEN
+    scanNumber; lookahead := xNumber
+  ELSE
+    CASE ch OF
+      "{" : lookahead := xLeftBrace
+    | "}" : lookahead := xRightBrace
+    | "[" : lookahead := xLeftBrack
+    | "]" : lookahead := xRightBrack
+    | ":" : lookahead := xColon
+    | "," : lookahead := xComma
+    | 0X  : lookahead := xEof
+    ELSE lookahead := xUnknown
+    END;
+    lexeme[0] := 0X;
+    Texts.Read(reader, ch)
   END
 END scan;
 
+(* Parser *)
 PROCEDURE Parse*(name : ARRAY OF CHAR) : BOOLEAN;
-BEGIN RETURN TRUE
+  PROCEDURE match(exp : SHORTINT);
+  BEGIN
+    IF lookahead = exp THEN scan
+    ELSE (* syntax error *)
+    END
+  END match;
+
+  PROCEDURE^ parseObject;
+  PROCEDURE^ parseArray;
+
+  PROCEDURE parseValue;
+  BEGIN
+    CASE lookahead OF
+      xString : scan
+    | xNumber : scan
+    | xLeftBrace : parseObject
+    | xLeftBrack : parseArray
+    | xTrue, xFalse, xNull : scan
+    ELSE (* syntax error *)
+    END
+  END parseValue;
+
+  PROCEDURE parseArray;
+  BEGIN
+    match(xLeftBrack);
+    parseValue;
+    WHILE lookahead = xComma DO
+      match(xComma);
+      parseValue;
+    END;
+    match(xRightBrack)
+  END parseArray;
+
+  PROCEDURE parseObject;
+  BEGIN
+    match(xLeftBrace);
+    IF lookahead # xRightBrace THEN
+      match(xString);
+      match(xColon);
+      parseValue;
+      WHILE lookahead = xComma DO
+        match(xComma);
+        match(xString);
+        match(xColon);
+        parseValue;
+      END
+    END;
+    match(xRightBrace)
+  END parseObject;
+
+BEGIN
+  parseObject;
+  RETURN TRUE
 END Parse;
 
 BEGIN (* Test *)
   NEW(text); Texts.Open(text, "test0.txt");
   Texts.OpenReader(reader, text, 0);
 
-  WHILE TRUE DO
+  Texts.Read(reader, ch);
+  REPEAT
     scan;
-    Console.String(lex); Console.Ln;
-    Console.Int(len, 4); Console.Ln;
-    Console.Int(kind, 4); Console.Ln
-  END
+    Console.String(lexeme); Console.Ln;
+  UNTIL lookahead = xEof
 
 
 END JSON.
