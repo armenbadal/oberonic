@@ -58,9 +58,8 @@ END NewNull;
 
 PROCEDURE NewObject*() : Object;
 VAR obj : Object;
-BEGIN NEW(obj);
-   obj^.elems := NIL;
-  NEW(obj^.ep);
+BEGIN NEW(obj); obj^.elems := NIL;
+  NEW(obj^.ep); obj^.ep^.key := NIL; obj^.ep^.value := NIL;
   RETURN obj
 END NewObject;
 
@@ -179,7 +178,7 @@ BEGIN Texts.WriteString(w, "{"); Texts.WriteLn(W);
   END;
   Texts.WriteLn(W); indent := indent - 4;
   FOR s := 1 TO indent DO Texts.Write(W, ' ') END;
-  Texts.WriteString(w, "}"); Texts.WriteLn(W)
+  Texts.WriteString(w, "}")
 END Print;
 
 
@@ -194,9 +193,9 @@ BEGIN indent := 0;
 
   v3 := NewObject();
   v3(Object).add(NewString("k0"),
-				 NewBoolean(TRUE));
+		 NewBoolean(TRUE));
   v3(Object).add(NewString("k1"),
-				 v2);
+		 v2);
 
   v4 := NewObject();
   v4(Object).add(NewString("e2"), NewNull());
@@ -204,11 +203,13 @@ BEGIN indent := 0;
   v4(Object).add(NewString("e1"), NewBoolean(FALSE));
 
   Texts.OpenWriter(W);
+(*
   v0.Print(W); Texts.WriteLn(W);
   v1.Print(W); Texts.WriteLn(W);
   v2.Print(W); Texts.WriteLn(W);
+*)
   v3.Print(W); Texts.WriteLn(W);
-  v4.Print(W); Texts.WriteLn(W);
+  (* v3.Print(W); Texts.WriteLn(W); *)
   Texts.Append(Oberon.Log, W.buf)
 END Test4.
 
