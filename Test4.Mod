@@ -4,12 +4,13 @@ MODULE Test4;
 IMPORT Texts, Oberon;
 
 TYPE
-  Value*  = POINTER TO ValueDesc;
-  Pair*   = POINTER TO PairDesc;
-  Object* = POINTER TO ObjectDesc;
-  Array*  = POINTER TO ArrayDesc;
-  String* = POINTER TO StringDesc;
-  Number* = POINTER TO NumberDesc;
+  Value*   = POINTER TO ValueDesc;
+  Pair*    = POINTER TO PairDesc;
+  Object*  = POINTER TO ObjectDesc;
+  Array*   = POINTER TO ArrayDesc;
+  String*  = POINTER TO StringDesc;
+  Number*  = POINTER TO NumberDesc;
+  Boolean* = POINTER TO BooleanDesc;
 
   ValueDesc = RECORD
     next : Value
@@ -35,16 +36,26 @@ TYPE
   END;
 
   NumberDesc = RECORD(ValueDesc)
-    value : REAL
+    value- : REAL
   END;
 
+  BooleanDesc = RECORD(ValueDesc)
+    value- : BOOLEAN
+  END;
 
 VAR
-  v0, v1, v2, v3 : Value;
+  v0, v1, v2, v3, v4 : Value; (* Test *)
   W : Texts.Writer;
+  indent : INTEGER;
 
 
 (* Constructors *)
+PROCEDURE NewNull() : Value;
+VAR val : Value;
+BEGIN NEW(val); val^.next := NIL;
+  RETURN val
+END NewNull;
+
 PROCEDURE NewObject*() : Object;
 VAR obj : Object;
 BEGIN NEW(obj);
@@ -106,9 +117,21 @@ BEGIN NEW(str); COPY(sr, str^.data);
   RETURN str;
 END NewString;
 
+PROCEDURE NewBoolean*(vl : BOOLEAN) : Boolean;
+VAR bol : Boolean;
+BEGIN NEW(bol); bol^.value := vl;
+  RETURN bol
+END NewBoolean;
 
 (**)
 PROCEDURE (val : Value) Print*(VAR w : Texts.Writer);
+BEGIN Texts.WriteString(w, "null")
+END Print;
+
+PROCEDURE (bol : Boolean) Print*(VAR w : Texts.Writer);
+BEGIN
+  IF bol^.value THEN Texts.WriteString(w, "true")
+  ELSE Texts.WriteString(w, "false") END;
 END Print;
 
 PROCEDURE (num : Number) Print*(VAR w : Texts.Writer);
@@ -135,38 +158,57 @@ BEGIN Texts.WriteString(w, "[");
 END Print;
 
 PROCEDURE (obj : Object) Print*(VAR w : Texts.Writer);
-VAR ep : Pair;
-BEGIN Texts.WriteString(w, "{");
+VAR ep : Pair; s : INTEGER;
+BEGIN Texts.WriteString(w, "{"); Texts.WriteLn(W);
+  indent := indent + 4;
   obj.Reset;
   IF obj.HasNext() THEN
     ep := obj.Next();
+    FOR s := 1 TO indent DO Texts.Write(W, ' ') END;
     ep^.key.Print(w);
     Texts.WriteString(w, " : ");
     ep^.value.Print(w);
     WHILE obj.HasNext() DO
-      Texts.WriteString(w, ", ");
+      Texts.WriteString(w, ", ");  Texts.WriteLn(W);
+      FOR s := 1 TO indent DO Texts.Write(W, ' ') END;
       ep := obj.Next();
       ep^.key.Print(w);
       Texts.WriteString(w, " : ");
       ep^.value.Print(w)
     END
   END;
-  Texts.WriteString(w, "}")
+  Texts.WriteLn(W); indent := indent - 4;
+  FOR s := 1 TO indent DO Texts.Write(W, ' ') END;
+  Texts.WriteString(w, "}"); Texts.WriteLn(W)
 END Print;
 
 
-BEGIN
+BEGIN indent := 0;
   v0 := NewNumber(3.14);
+
   v1 := NewString("Text");
-  v2 := NewArray(2); v2(Array).set(0, v0); v2(Array).set(1, v1);
-  v3 := NewObject(); v3(Object).add(NewString("k0"), v1);
-    v3(Object).add(NewString("k1"), v2);
+
+  v2 := NewArray(2);
+  v2(Array).set(0, v0);
+  v2(Array).set(1, v1);
+
+  v3 := NewObject();
+  v3(Object).add(NewString("k0"),
+				 NewBoolean(TRUE));
+  v3(Object).add(NewString("k1"),
+				 v2);
+
+  v4 := NewObject();
+  v4(Object).add(NewString("e2"), NewNull());
+  v4(Object).add(NewString("e0"), v3);
+  v4(Object).add(NewString("e1"), NewBoolean(FALSE));
 
   Texts.OpenWriter(W);
   v0.Print(W); Texts.WriteLn(W);
-  v1.Print(W); Texts.WriteLn(W); 
+  v1.Print(W); Texts.WriteLn(W);
   v2.Print(W); Texts.WriteLn(W);
   v3.Print(W); Texts.WriteLn(W);
+  v4.Print(W); Texts.WriteLn(W);
   Texts.Append(Oberon.Log, W.buf)
 END Test4.
 
