@@ -18,23 +18,76 @@ JSON֊ի քերականությունը վերցրել եմ http://json.org/ կ�
 ````
 Script = Object.
 Object = '{' [STRING ':' Value {',' STRING ':' Value}] '}'.
-Value = STRING | NUMBER | Array | Object | 'true' | 'false' | 'null'.
-Array = '[' [Value {',' Value}] ']'.
+Value  = STRING | NUMBER | Array | Object | 'true' | 'false' | 'null'.
+Array  = '[' [Value {',' Value}] ']'.
 ````
 
 Քերականության մեջ գլխատառերով գրառված տերմինալային սիմվոլները,
 սահմանվում են հետևյալ կերպ․
 
 ````
-STRING = '"' {Char} '"'.
-Cahr = any-Unicode-character-except-"-or-\-or-control-character
-     | '\"' | '\\' | '\/' | '\b' | '\f' | '\n' | '\r' | '\t'
-     | '\u' four-hex-digits.
-NUMBER = ['-']('0'|('1'..'9'){('0'..'9')})['.'('0'..'9'){'0'..'9')}][('e'|'E')[('+'|'-')]('0'..'9'){'0'..'9')}].
+STRING   = '"' {Char} '"'.
+Cahr     = any-Unicode-character-except-"-or-\-or-control-character
+         | '\"' | '\\' | '\/' | '\b' | '\f' | '\n' | '\r' | '\t'
+         | '\u' four-hex-digits.
+NUMBER   = ['-'] Integer [Fraction] [Exponent].
+Integer  = '0' | ('1'..'9'){('0'..'9')}.
+Fraction = ('e'|'E')[('+'|'-')]('0'..'9'){'0'..'9')}.
+Exponent = '.'('0'..'9'){'0'..'9')}.
 ````
 
-
 ## Տվյալների կառուցվածքները
+
+Քերականությունից երևում է, որ JSON ֆայլում հանդիպում են հետևյալ
+տիպի օբյեկտները․ _տողեր_, _իրական թվեր_, _բուլյան_ հաստատուններ,
+_`null`_ հաստատունը, _զանգվածներ_ և _օբյեկտներ_։ Այդ տիպերի
+համար սահմանել եմ հետևյալ անունները․
+
+````oberon
+TYPE
+  Value*   = POINTER TO ValueDesc;
+  Pair*    = POINTER TO PairDesc;
+  Object*  = POINTER TO ObjectDesc;
+  Array*   = POINTER TO ArrayDesc;
+  String*  = POINTER TO StringDesc;
+  Number*  = POINTER TO NumberDesc;
+  Boolean* = POINTER TO BooleanDesc;
+````
+
+````oberon
+TYPE
+  ValueDesc = RECORD
+    next : Value
+  END;
+
+  StringDesc = RECORD(ValueDesc)
+    data : ARRAY 256 OF CHAR
+  END;
+
+  NumberDesc = RECORD(ValueDesc)
+    value- : REAL
+  END;
+
+  BooleanDesc = RECORD(ValueDesc)
+    value- : BOOLEAN
+  END;
+
+  PairDesc = RECORD
+    key- : String;
+    value- : Value;
+    next : Pair;
+  END;
+
+  ObjectDesc = RECORD(ValueDesc)
+    elems, ep : Pair
+  END;
+
+  ArrayDesc = RECORD(ValueDesc)
+    count- : INTEGER;
+    elems : POINTER TO ARRAY OF Value
+  END;
+````
+
 
 ## Ծառի գրառումը ֆայլի մեջ
 
