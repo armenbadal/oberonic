@@ -54,12 +54,20 @@ TYPE
   Boolean* = POINTER TO BooleanDesc;
 ````
 
+`ValueDesc` գրառումը, որը պարունակում է իր հաջորդին կապվելու
+համար նախատեսված միակ `next` ցուցիչը, միաժամանակ ծառայում է
+նաև որպես `null` հաստատունի մոդել։
+
 ````oberon
 TYPE
   ValueDesc = RECORD
     next : Value
   END;
+````
 
+Տողերի, թվերի ու բուլյան արժեքների մոդելներն ընդլայնում են `ValueDesc` տիպը։
+
+````oberon
   StringDesc = RECORD(ValueDesc)
     data : ARRAY 256 OF CHAR
   END;
@@ -71,7 +79,11 @@ TYPE
   BooleanDesc = RECORD(ValueDesc)
     value- : BOOLEAN
   END;
+````
 
+`Object`֊ը զույգերի ցուցակ է, իսկ զույգը՝ `Pair`, 
+
+````oberon
   PairDesc = RECORD
     key- : String;
     value- : Value;
